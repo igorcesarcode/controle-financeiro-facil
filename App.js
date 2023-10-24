@@ -12,6 +12,10 @@ import {
 import Constants from "expo-constants";
 import * as SQLite from "expo-sqlite";
 
+import DropDownPicker from 'react-native-dropdown-picker';
+import Moment from 'moment';
+
+
 function openDatabase() {
   if (Platform.OS === "web") {
     return {
@@ -32,16 +36,17 @@ const db = openDatabase();
 function Items({ done: doneHeading, onPressItem })  { const [items, setItems] = useState(null);
 
   useEffect(() => {
+    console.log("doneHeading: "+doneHeading);
     db.transaction((tx) => {
       tx.executeSql(
-        `select * from despesas where done = ?;`,
-        [doneHeading ? 1 : 0],
+        `select * from despesas where categoria = ?;`,
+        [doneHeading],
         (_, { rows: { _array } }) => setItems(_array)
       );
     });
   }, []);
 
-  const heading = doneHeading ? "Completed" : "Despesas";
+  const heading = "Despesas de "+doneHeading;
 
   if (items === null || items.length === 0) {
     return null;
@@ -62,9 +67,9 @@ function Items({ done: doneHeading, onPressItem })  { const [items, setItems] = 
           }}
         >
           <View style={styles.flexRow}>
-            <Text style={{ color: done ? "#fff" : "#000" }}>{data} | </Text> 
-            <Text style={{ color: done ? "#fff" : "#000" }}>{valor} | </Text> 
-            <Text style={{ color: done ? "#fff" : "#000" }}>{value} </Text>
+            <Text>{Moment(data).format('DD/MM/yyyy')} - </Text> 
+            <Text>{valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</Text> 
+            <Text>{value? " - "+value : ""} </Text>
           </View>
         </TouchableOpacity>
       ))}
@@ -78,18 +83,30 @@ export default function App() {
 
   const [forceUpdate, forceUpdateId] = useForceUpdate();
 
+  const [open, setOpen] = useState(false);
+  const [categoria, setCategoria] = useState("Mercado");
+
+
+  const [categorias, setCategorias] = useState([
+    {label: 'Mercado', value: 'Mercado'},
+    {label: 'Transporte', value: 'Transporte'},
+    {label: 'Moradia', value: 'Moradia'}
+  ]);
+
+  Moment.locale('pt-BR');
+
   useEffect(() => {
     db.transaction((tx) => {
+      //tx.executeSql(
+      //  "drop table despesas;"
+      //);
       tx.executeSql(
-        "create table if not exists despesas (id integer primary key not null, done int, value text, valor integer);"
-      );
-      tx.executeSql(
-        "alter table despesas add column data date;"
+        "create table if not exists despesas (id integer primary key not null, done int, value text, valor integer, data date, categoria text);"
       );
     });
   }, []);
 
-  const add = (text, valor) => {
+  const add = (text, valor, categoria) => {
     // is valor empty?
     console.log(text)
     console.log(valor)
@@ -100,8 +117,8 @@ export default function App() {
 
     db.transaction(
       (tx) => {
-        tx.executeSql("insert into despesas (done, value, valor, data) values (0, ?, ?, CURRENT_TIMESTAMP)", [text, valor]);
-        tx.executeSql("select * from despesas", [], (_, { rows }) =>
+        tx.executeSql("insert into despesas (done, value, valor, data, categoria) values (0, ?, ?, CURRENT_TIMESTAMP, ?)", [text, valor, categoria]);
+        tx.executeSql("select * from despesas where categoria = ?", [categoria], (_, { rows }) =>
           console.log(JSON.stringify(rows))
         );
       },
@@ -127,12 +144,21 @@ export default function App() {
         </View>
       ) : (
         <>
-          <View style={styles.flexRow}>
+          <View>
+            <DropDownPicker
+              open={open}
+              value={categoria}
+              items={categorias}
+              setOpen={setOpen}
+              setValue={setCategoria}
+              setItems={setCategorias}
+              onChangeValue={forceUpdate}
+            />
             <TextInput
               onChangeText={(valor) => setValor(valor)}
               placeholder="Valor (R$)"
               style={styles.input}
-              value={text}
+              value={valor}
               keyboardType="numeric"
             />
             <TextInput
@@ -145,16 +171,16 @@ export default function App() {
             <Button
               title="OK"
               onPress={() => {
-                add(text, valor);
-                setValor(null);
-                setText(null);
+                add(text, valor, categoria)
+                setValor(null)
+                setText(null)
               }}
             />
           </View>
           <ScrollView style={styles.listArea}>
             <Items
               key={`forceupdate-todo-${forceUpdateId}`}
-              done={false}
+              done={categoria}
             />
           </ScrollView>
         </>
@@ -186,7 +212,6 @@ const styles = StyleSheet.create({
     borderColor: "#4630eb",
     borderRadius: 4,
     borderWidth: 1,
-    flex: 1,
     height: 48,
     margin: 16,
     padding: 8,
