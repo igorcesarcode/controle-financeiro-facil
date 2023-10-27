@@ -229,7 +229,7 @@ export default function App() {
             <Button
               title="OK"
               onPress={() => {
-                add(text, valor, null)
+                add(text, valor, categoria)
                 setValor(null)
                 setText(null)
               }}
