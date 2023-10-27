@@ -17,6 +17,8 @@ import Moment from 'moment';
 
 
 function openDatabase() {
+  console.log("openDatabase()");
+
   if (Platform.OS === "web") {
     return {
       transaction: () => {
@@ -34,7 +36,7 @@ function openDatabase() {
 const db = openDatabase();
 
 function Items({ done: doneHeading, onPressItem })  { const [items, setItems] = useState(null);
-
+  console.log("Items()");
   useEffect(() => {
     console.log("doneHeading: "+doneHeading);
     db.transaction((tx) => {
@@ -53,6 +55,7 @@ function Items({ done: doneHeading, onPressItem })  { const [items, setItems] = 
   }
 
   return (
+    
     <View style={styles.sectionContainer}>
       <Text style={styles.sectionHeading}>{heading}</Text>
       {items.map(({ id, done, value, data, valor }) => (
@@ -78,22 +81,34 @@ function Items({ done: doneHeading, onPressItem })  { const [items, setItems] = 
 }
 
 export default function App() {
+  console.log("App()");
   const [text, setText] = useState(null);
   const [valor, setValor] = useState(null);
 
-  const [forceUpdate, forceUpdateId] = useForceUpdate();
+  const [forceUpdate, forceUpdateId] = useState(useForceUpdate());
 
   const [open, setOpen] = useState(false);
   const [categoria, setCategoria] = useState("Mercado");
+  const [novaCategoria, setNovaCategoria] = useState("Teste");
+  const [categorias, setCategorias] = useState([{"label":"Aaaa","value":"Aaaa"}]);
+ 
+  Moment.locale('pt-BR'); 
 
-
-  const [categorias, setCategorias] = useState([
-    {label: 'Mercado', value: 'Mercado'},
-    {label: 'Transporte', value: 'Transporte'},
-    {label: 'Moradia', value: 'Moradia'}
-  ]);
-
-  Moment.locale('pt-BR');
+  function carregarCategorias() {
+    console.log('carregarCategorias()')
+    db.transaction((tx) => {
+    tx.executeSql(
+      'select * from categoria;', 
+      null,
+      (_, { rows: { _array } }) => {
+        console.log("categorias: '" + JSON.stringify(categorias) + "'") 
+        setCategorias(_array);  
+        console.log("_array: '" + JSON.stringify(_array) + "'")
+        console.log("categorias: '" + JSON.stringify(categorias) + "'")
+        }
+      );
+    });
+  }
 
   useEffect(() => {
     db.transaction((tx) => {
@@ -102,11 +117,22 @@ export default function App() {
       //);
       tx.executeSql(
         "create table if not exists despesas (id integer primary key not null, done int, value text, valor integer, data date, categoria text);"
+      );/*
+      tx.executeSql(
+        "drop table categoria;"
+      );*/
+      tx.executeSql(
+        "create table if not exists categoria (label text, value text);"
       );
+      carregarCategorias()
+
+      
     });
   }, []);
 
   const add = (text, valor, categoria) => {
+    console.log("add =");
+
     // is valor empty?
     console.log(text)
     console.log(valor)
@@ -120,6 +146,38 @@ export default function App() {
         tx.executeSql("insert into despesas (done, value, valor, data, categoria) values (0, ?, ?, CURRENT_TIMESTAMP, ?)", [text, valor, categoria]);
         tx.executeSql("select * from despesas where categoria = ?", [categoria], (_, { rows }) =>
           console.log(JSON.stringify(rows))
+        );
+      },
+      (e) => {console.log(e)},
+      forceUpdate
+    );
+
+    console.log("linha 106")
+
+  };
+
+  const addCategoria = (novaCategoria) => {
+    console.log("addCategoria ="+novaCategoria);
+
+    if (novaCategoria === null || novaCategoria === "") {
+      return false;
+    }
+
+    db.transaction(
+      (tx) => {
+        tx.executeSql(
+          "insert into categoria (label, value) values (?, ?)", 
+          [novaCategoria, novaCategoria],
+          (_, { rows }) => {
+            "ADICIONADO COM SUCESSO"
+          }
+        );
+        tx.executeSql(
+          "select * from categoria", 
+          [], 
+          (_, { rows }) => {
+            setCategoria(rows) 
+          }
         );
       },
       (e) => {console.log(e)},
@@ -145,6 +203,7 @@ export default function App() {
       ) : (
         <>
           <View>
+            
             <DropDownPicker
               open={open}
               value={categoria}
@@ -152,7 +211,6 @@ export default function App() {
               setOpen={setOpen}
               setValue={setCategoria}
               setItems={setCategorias}
-              onChangeValue={forceUpdate}
             />
             <TextInput
               onChangeText={(valor) => setValor(valor)}
@@ -171,9 +229,24 @@ export default function App() {
             <Button
               title="OK"
               onPress={() => {
-                add(text, valor, categoria)
+                add(text, valor, null)
                 setValor(null)
                 setText(null)
+              }}
+            />
+
+            <TextInput
+              onChangeText={(text) => setNovaCategoria(text)}
+              placeholder="Categoria"
+              style={styles.input}
+              value={text}
+            />
+            
+            <Button
+              title="OK"
+              onPress={() => {
+                addCategoria(novaCategoria)
+                setNovaCategoria(null)
               }}
             />
           </View>
@@ -190,6 +263,8 @@ export default function App() {
 }
 
 function useForceUpdate() {
+  console.log("useForceUpdate()");
+
   const [value, setValue] = useState(0);
   return [() => setValue(value + 1), value];
 }
