@@ -4,65 +4,17 @@ import Moment from "moment";
 import { useCallback, useEffect, useState } from "react";
 import {
   Button,
+  FlatList,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
 } from "react-native";
 import DropDownPicker from "react-native-dropdown-picker";
 
-// function Items({ items: doneHeading, onPressItem }) {
-//   const [items, setItems] = useState(null);
-//   console.log("Items()");
-//   useEffect(() => {
-//     console.log("doneHeading: " + doneHeading);
-//     db.transaction((tx) => {
-//       tx.executeSql(
-//         `select * from despesas where categoria = ?;`,
-//         [doneHeading],
-//         (_, { rows: { _array } }) => setItems(_array)
-//       );
-//     });
-//   }, []);
-
-//   const heading = "Despesas de " + doneHeading;
-
-//   if (items === null || items.length === 0) {
-//     return null;
-//   }
-
-//   return (
-//     <View style={styles.sectionContainer}>
-//       <Text style={styles.sectionHeading}>{heading}</Text>
-//       {items.map(({ id, done, value, data, valor }) => (
-//         <TouchableOpacity
-//           key={id}
-//           onPress={() => onPressItem && onPressItem(id)}
-//           style={{
-//             backgroundColor: done ? "#1c9963" : "#fff",
-//             borderColor: "#000",
-//             borderWidth: 1,
-//             padding: 8,
-//           }}
-//         >
-//           <View style={styles.flexRow}>
-//             <Text>{Moment(data).format("DD/MM/yyyy")} - </Text>
-//             <Text>
-//               {valor.toLocaleString("pt-BR", {
-//                 style: "currency",
-//                 currency: "BRL",
-//               })}
-//             </Text>
-//             <Text>{value ? " - " + value : ""} </Text>
-//           </View>
-//         </TouchableOpacity>
-//       ))}
-//     </View>
-//   );
-// }
-
+Moment.locale("pt-BR");
 interface DropdownItensProps {
   label: string;
   value: string;
@@ -78,21 +30,30 @@ interface SQLItensProps {
   valor: number;
   data: Date;
   categoria: string;
-  value: string;
+  value: number;
 }
 
 export default function App() {
-  const [db, setDb] = useState(SQLite.openDatabase("example.db"));
+  //Responsável pelo db
+  const [db, _] = useState(SQLite.openDatabase("example.db"));
+  //Responsável pelo gerenciamento do Dropdown
   const [categorys, setCategorys] = useState<DropdownItensProps[] | []>([]);
   const [open, setOpen] = useState<boolean>(false);
   const [selectedCategory, setSelectedCategory] = useState(null);
 
+  //Responsável pelas listagens
+  const [expenses, setExpenses] = useState<SQLItensProps[] | []>([]);
+
+  //Responsável pelos inputs
   const [amount, setAmount] = useState<null | string>(null);
   const [category, setCategory] = useState<string | null>(null);
   const [description, setDescription] = useState<string | null>(null);
-  const [expenses, setExpenses] = useState<SQLItensProps[]>([]);
 
-  Moment.locale("pt-BR");
+  //TODO: tratamento de formulario https://react-hook-form.com/
+
+  //TODO: tratamento de shema https://zod.dev/
+
+  //TODO: resolvers para formulario com o zod https://www.npmjs.com/package/@hookform/resolvers
 
   const loadCategories = () => {
     db.transaction((tx) => {
@@ -126,23 +87,35 @@ export default function App() {
     setDescription(null);
   }, []);
 
-  useEffect(() => {
+  const startTable = useCallback(() => {
     db.transaction((tx) => {
-      //tx.executeSql(
-      //  "drop table despesas;"
-      //);
       tx.executeSql(
         "create table if not exists despesas (id integer primary key not null, done int, value text, valor integer, data date, categoria text);"
       );
-      // tx.executeSql("drop table categoria;");
-      // tx.executeSql("drop table despesas;");
       tx.executeSql(
         "create table if not exists categoria (label text, value text);"
       );
-      loadCategories();
-      loadExpenses();
     });
   }, []);
+
+  const clearRecords = useCallback(() => {
+    db.transaction((tx) => {
+      tx.executeSql("DELETE FROM categoria;");
+      tx.executeSql("DELETE FROM despesas;");
+    });
+    setExpenses([]);
+    setCategorys([]);
+    setSelectedCategory(null);
+  }, []);
+
+  const updateItemDone = (id: number, done: number) => {
+    db.transaction((tx) => {
+      //TODO: COMANDO PARA ATUALIZAR O ITEM ATUAL
+      tx.executeSql("UPDATE", [done, id], (_, { rows }) => {
+        loadCategories();
+      });
+    });
+  };
 
   const addNewPantry = () => {
     if (
@@ -189,13 +162,7 @@ export default function App() {
             //console.log("insert into categoria (label, value) values (?, ?)", rows._array);
             console.log("ADICIONADO COM SUCESSO");
             loadCategories();
-          }
-        );
-        tx.executeSql(
-          "select * from categoria",
-          [],
-          (_, { rows }: SQLProps) => {
-            //console.log("select * from categoria", rows._array);
+            setCategory(null);
           }
         );
       },
@@ -205,38 +172,63 @@ export default function App() {
     );
   };
 
+  useEffect(() => {
+    startTable();
+    loadCategories();
+    loadExpenses();
+  }, []);
+
   if (Platform.OS === "web") {
     <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
       <Text style={styles.heading}>Expo SQlite is not supported on web!</Text>
     </View>;
   }
 
+  const renderItem = useCallback(
+    ({ item }) => {
+      return (
+        <TouchableOpacity
+          onPress={() => {
+            updateItemDone(item.id, item.dode === 0 ? 1 : 0);
+          }}
+          style={{
+            backgroundColor: item.done ? "#1c9963" : "#fff",
+            borderColor: "#000",
+            borderWidth: 1,
+            padding: 8,
+          }}
+        >
+          <View style={{ width: "100%", flexDirection: "row", gap: 10 }}>
+            <Text>Descrição: {item.value}</Text>
+            <Text>Data: {Moment(item.data).format("DD/MM/yyyy")}</Text>
+
+            <Text>
+              {item.valor.toLocaleString("pt-BR", {
+                style: "currency",
+                currency: "BRL",
+              })}
+            </Text>
+
+            <Text>Categoria: {item.categoria}</Text>
+          </View>
+        </TouchableOpacity>
+      );
+    },
+    [expenses]
+  );
+
   return (
     <View style={styles.container}>
       <Text style={styles.heading}>Controle Financeiro Fácil</Text>
-      <ScrollView style={{ width: "100%", height: 400 }}>
-        {expenses?.map((item, index) => (
-          <View
-            key={index}
-            style={{ width: "100%", flexDirection: "row", gap: 10 }}
-          >
-            <Text>ID: {item.id}</Text>
-            <Text>Valor: {item.valor}</Text>
-            <Text>Descrição: {item.value}</Text>
-            <Text>Categoria: {item.categoria}</Text>
-          </View>
-        ))}
-      </ScrollView>
+
+      <FlatList
+        data={expenses}
+        keyExtractor={({ id }) => String(id)}
+        renderItem={renderItem}
+      />
 
       <>
-        <View
-          style={{
-            gap: 10,
-            paddingHorizontal: 10,
-            paddingTop: 10,
-            paddingBottom: 30,
-          }}
-        >
+        <View style={styles.form}>
           <DropDownPicker
             open={open}
             value={selectedCategory}
@@ -274,6 +266,7 @@ export default function App() {
           />
 
           <Button title="Adicionar Categoria" onPress={addNewCategory} />
+          <Button title="Limpar Registros" onPress={clearRecords} />
         </View>
       </>
     </View>
@@ -285,6 +278,12 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     flex: 1,
     paddingTop: Constants.statusBarHeight,
+  },
+  form: {
+    gap: 10,
+    paddingHorizontal: 10,
+    paddingTop: 10,
+    paddingBottom: 30,
   },
   heading: {
     fontSize: 20,
